@@ -4,9 +4,9 @@ from django.db import models
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils.translation import ugettext_lazy as _
+
 from request.managers import RequestManager
 from request.utils import HTTP_STATUS_CODES, browsers, engines
-from ipware.ip import get_ip
 from request import settings as request_settings
 
 
@@ -39,8 +39,8 @@ class Request(models.Model):
         verbose_name_plural = _('requests')
         ordering = ('-time',)
 
-    def __unicode__(self):
-        return u'[%s] %s %s %s' % (self.time, self.method, self.path, self.response)
+    def __str__(self):
+        return '[%s] %s %s %s' % (self.time, self.method, self.path, self.response)
 
     def get_user(self):
         return get_user_model().objects.get(pk=self.user_id)
@@ -54,10 +54,7 @@ class Request(models.Model):
         self.is_ajax = request.is_ajax()
 
         # User infomation
-
-        # @see: https://github.com/kylef/django-request/issues/54
-        self.ip = get_ip(request) if not None else '0.0.0.0'
-		
+        self.ip = request.META.get('REMOTE_ADDR', '')
         self.referer = request.META.get('HTTP_REFERER', '')[:255]
         self.user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
         self.language = request.META.get('HTTP_ACCEPT_LANGUAGE', '')[:255]
@@ -75,7 +72,7 @@ class Request(models.Model):
         if commit:
             self.save()
 
-    #@property
+    @property
     def browser(self):
         if not self.user_agent:
             return
@@ -83,9 +80,8 @@ class Request(models.Model):
         if not hasattr(self, '_browser'):
             self._browser = browsers.resolve(self.user_agent)
         return self._browser[0]
-    browser = property(browser)
 
-    #@property
+    @property
     def keywords(self):
         if not self.referer:
             return
@@ -94,15 +90,13 @@ class Request(models.Model):
             self._keywords = engines.resolve(self.referer)
         if self._keywords:
             return ' '.join(self._keywords[1]['keywords'].split('+'))
-    keywords = property(keywords)
 
-    #@property
+    @property
     def hostname(self):
         try:
             return gethostbyaddr(self.ip)[0]
         except Exception:  # socket.gaierror, socket.herror, etc
             return self.ip
-    hostname = property(hostname)
 
     def save(self, *args, **kwargs):
         if not request_settings.REQUEST_LOG_IP:
